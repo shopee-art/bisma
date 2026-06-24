@@ -1,0 +1,115 @@
+{{ define "profile" }}
+<div class="max-w-4xl mx-auto w-full space-y-6">
+
+    {{ if .success }}
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg text-sm font-medium">
+        ✨ {{ .success }}
+    </div>
+    {{ end }}
+    {{ if .error }}
+    <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm font-medium">
+        ⚠️ {{ .error }}
+    </div>
+    {{ end }}
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="md:col-span-1 space-y-6">
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200 text-center flex flex-col items-center">
+                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Foto Profil</h4>
+                
+                <div class="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-2 border-blue-600 flex items-center justify-center mb-4 relative group">
+                    {{ if .profile.ProfilePicture }}
+                        <img src="{{ .profile.ProfilePicture }}" alt="Avatar" class="w-full h-full object-cover">
+                    {{ else }}
+                        <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    {{ end }}
+                </div>
+
+                <p class="text-sm font-bold text-gray-800">{{ .profile.Name }}</p>
+                <p class="text-xs font-mono text-gray-500 mt-0.5 uppercase">ID: {{ .profile.UsernameOrNIP }}</p>
+                <span class="inline-block bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full mt-2 uppercase tracking-wide">{{ .role }}</span>
+
+                <form action="/profile/avatar" method="POST" enctype="multipart/form-data" class="mt-6 w-full border-t pt-4">
+                    <label class="block text-left text-xs font-semibold text-gray-600 mb-2">Ganti Foto Baru:</label>
+                    <input type="file" name="avatar" accept=".jpg,.jpeg,.png" required
+                           class="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                    <p class="text-[10px] text-gray-400 text-left mt-1">Format: JPG, JPEG, PNG. Maks 2MB.</p>
+                    <button type="submit" class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded transition shadow-xs">
+                        Unggah Foto
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="md:col-span-2 space-y-6">
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h4 class="text-sm font-bold text-gray-700 uppercase tracking-wide border-b pb-2 mb-4">Kelengkapan Data Profil</h4>
+                
+                <form action="/profile/update" method="POST" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Tempat Lahir</label>
+                            <input type="text" name="birth_place" value="{{ .profile.BirthPlace }}" placeholder="Contoh: Ciamis"
+                                   class="w-full p-2 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Lahir</label>
+                            <input type="date" name="birth_date" value="{{ .profile.BirthDate }}"
+                                   class="w-full p-2 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Hobi / Kegemaran</label>
+                        <input type="text" name="hobby" value="{{ .profile.Hobby }}" placeholder="Contoh: Membaca, Sepak Bola, Coding"
+                               class="w-full p-2 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50">
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-5 py-2 rounded transition shadow-xs">
+                            Simpan Perubahan Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h4 class="text-sm font-bold text-gray-700 uppercase tracking-wide border-b pb-2 mb-4 text-rose-600">Keamanan & Sandi Akun</h4>
+                
+                <form action="/profile/password" method="POST" class="space-y-4" x-data="{ newPwd: '', confPwd: '' }">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Password Saat Ini (Lama)</label>
+                        <input type="password" name="old_password" required placeholder="Masukkan kata sandi sekarang"
+                               class="w-full p-2 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Password Baru</label>
+                            <input type="password" name="new_password" x-model="newPwd" required placeholder="Minimal 6 karakter"
+                                   class="w-full p-2 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Konfirmasi Password Baru</label>
+                            <input type="password" name="confirm_password" x-model="confPwd" required placeholder="Ulangi password baru"
+                                   class="w-full p-2 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div x-show="newPwd && confPwd && newPwd !== confPwd" class="text-xs text-rose-600 font-medium">
+                        ❌ Konfirmasi password tidak cocok dengan password baru.
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="submit" :disabled="newPwd !== confPwd"
+                                class="bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold px-5 py-2 rounded transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                            Perbarui Kata Sandi
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>
+{{ end }}

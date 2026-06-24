@@ -1,0 +1,95 @@
+{{ define "attendance_form" }}
+<div class="max-w-xl mx-auto w-full bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+    <h3 class="text-base font-bold text-gray-800 text-center mb-1">Ambil Presensi Hari Ini</h3>
+    <p class="text-xs text-gray-500 text-center mb-5">Gunakan kamera depan dan pastikan GPS dalam radius sekolah.</p>
+
+    {{ if .alreadyAbsent }}
+    <div class="bg-emerald-50 border border-emerald-200 p-5 rounded text-center">
+        <svg class="w-12 h-12 text-emerald-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <h4 class="text-sm font-bold text-emerald-800">Presensi Anda Hari Ini Sudah Tercatat</h4>
+    </div>
+    {{ else }}
+    <div class="space-y-4">
+        <div class="relative bg-black rounded overflow-hidden aspect-video shadow-inner flex items-center justify-center">
+            <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <img id="preview" class="hidden w-full h-full object-cover" alt="Selfie Preview">
+            <div class="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded">
+                Lat: <span id="text-lat">Mencari Satelit...</span> | Lng: <span id="text-lng">-</span>
+            </div>
+        </div>
+
+        <div id="status-box" class="hidden p-2.5 rounded text-xs font-semibold text-center"></div>
+
+        <div class="flex gap-2">
+            <button id="btn-capture" onclick="takeSnapshot()" class="flex-1 bg-blue-600 text-white text-xs font-bold py-2 rounded shadow-xs">Jepret Wajah</button>
+            <button id="btn-reset" onclick="resetCamera()" class="hidden bg-gray-200 text-gray-700 text-xs font-bold py-2 px-4 rounded">Ulangi</button>
+        </div>
+        <button id="btn-submit" onclick="sendAttendanceData()" disabled class="w-full bg-gray-400 text-white text-sm font-bold py-2.5 rounded cursor-not-allowed transition">Kirim Kehadiran</button>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam'), canvas = document.getElementById('canvas'), preview = document.getElementById('preview');
+        const btnCapture = document.getElementById('btn-capture'), btnReset = document.getElementById('btn-reset'), btnSubmit = document.getElementById('btn-submit'), statusBox = document.getElementById('status-box');
+        let lat = null, lng = null, photo = null;
+
+        if (video) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+                .then(stream => video.srcObject = stream)
+                .catch(() => alert("Izin kamera ditolak!"));
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                lat = pos.coords.latitude; lng = pos.coords.longitude;
+                document.getElementById('text-lat').innerText = lat.toFixed(6);
+                document.getElementById('text-lng').innerText = lng.toFixed(6);
+                checkReady();
+            }, () => {
+                statusBox.className = "p-2.5 rounded text-xs font-semibold text-center bg-red-100 text-red-700 block";
+                statusBox.innerText = "GPS Error! Aktifkan Lokasi Perangkat Anda.";
+            }, { enableHighAccuracy: true });
+        }
+
+        function takeSnapshot() {
+            const ctx = canvas.getContext('2d'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+            photo = canvas.toDataURL('image/jpeg');
+            video.classList.add('hidden'); preview.src = photo; preview.classList.remove('hidden');
+            btnCapture.classList.add('hidden'); btnReset.classList.remove('hidden'); checkReady();
+        }
+
+        function resetCamera() {
+            photo = null; preview.classList.add('hidden'); video.classList.remove('hidden');
+            btnReset.classList.add('hidden'); btnCapture.classList.remove('hidden'); checkReady();
+        }
+
+        function checkReady() {
+            if (lat && lng && photo) {
+                btnSubmit.disabled = false; btnSubmit.className = "w-full bg-emerald-600 text-white text-sm font-bold py-2.5 rounded cursor-pointer transition";
+            }
+        }
+
+        function sendAttendanceData() {
+            btnSubmit.disabled = true; btnSubmit.innerText = "Validasi Radius...";
+            fetch('/student/attendance/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ latitude: lat, longitude: lng, photo: photo })
+            })
+            .then(async res => {
+                const data = await res.json(); statusBox.classList.remove('hidden');
+                if (res.ok) {
+                    statusBox.className = "p-2.5 rounded text-xs font-semibold text-center bg-green-100 text-green-700";
+                    statusBox.innerText = data.message;
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    statusBox.className = "p-2.5 rounded text-xs font-semibold text-center bg-red-100 text-red-700";
+                    statusBox.innerText = data.message; btnSubmit.disabled = false; btnSubmit.innerText = "Kirim Kehadiran";
+                }
+            });
+        }
+    </script>
+    {{ end }}
+</div>
+{{ end }}

@@ -1,0 +1,138 @@
+{{ define "teachers" }}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6" x-data="{ editModalOpen: false, editData: {id: '', nip: '', name: '', role: '', addRole: ''} }">
+    <div x-data="{ addRole: '' }" class="bg-white p-5 rounded shadow-sm h-fit">
+        <h3 class="text-md font-bold text-gray-700 mb-4">Tambah Guru Baru</h3>
+        {{ if .error }}<div class="mb-3 bg-red-100 border-l-4 border-red-500 text-red-700 p-2 rounded text-xs">{{ .error }}</div>{{ end }}
+        {{ if .success }}<div class="mb-3 bg-green-100 border-l-4 border-green-500 text-green-700 p-2 rounded text-xs">{{ .success }}</div>{{ end }}
+        <form action="/admin/teachers" method="POST">
+            <div class="mb-2.5">
+                <label class="block text-xs font-medium text-gray-600">NIP</label>
+                <input type="text" name="nip" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm">
+            </div>
+            <div class="mb-2.5">
+                <label class="block text-xs font-medium text-gray-600">Nama & Gelar</label>
+                <input type="text" name="name" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm">
+            </div>
+            <div class="mb-2.5">
+                <label class="block text-xs font-medium text-gray-600">Password</label>
+                <input type="password" name="password" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm">
+            </div>
+            <div class="mb-2.5">
+                <label class="block text-xs font-medium text-gray-600">Role Utama</label>
+                <select name="role" class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm bg-white">
+                    <option value="guru">Guru</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="mb-2.5">
+                <label class="block text-xs font-medium text-gray-600">Jabatan Tambahan</label>
+                <select name="additional_role" x-model="addRole" class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm bg-white">
+                    <option value="">Tidak Ada</option>
+                    <option value="wali_kelas">Wali Kelas</option>
+                    <option value="wakasek_kesiswaan">Wakasek Kesiswaan</option>
+                </select>
+            </div>
+            <div class="mb-4" x-show="addRole === 'wali_kelas'" x-transition>
+                <label class="block text-xs font-medium text-gray-600">Kelas yang Dikelola</label>
+                <select name="managed_class_id" class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm bg-white">
+                    <option value="">-- Pilih Kelas --</option>
+                    {{ range .classes }}<option value="{{ .ID }}">{{ .ClassName }}</option>{{ end }}
+                </select>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded text-sm font-semibold shadow-xs">Simpan Guru</button>
+        </form>
+    </div>
+
+    <div class="bg-white p-5 rounded shadow-sm lg:col-span-2 flex flex-col justify-between overflow-x-auto">
+        <div>
+            <div class="mb-4 bg-blue-50 p-4 rounded border border-blue-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="text-xs text-blue-800">
+                    <strong class="block">Import Data Guru (.xlsx)</strong>
+                    Format: A:NIP | B:Nama | C:Pass | D:Role | E:Jabatan | F:ID_Kelas
+                </div>
+                <form action="/admin/teachers/import" method="POST" enctype="multipart/form-data" class="flex gap-1.5">
+                    <input type="file" name="excel_file" accept=".xlsx" required class="text-xs border bg-white p-1 rounded">
+                    <button type="submit" class="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded font-bold shadow-xs">Upload</button>
+                </form>
+            </div>
+            <form action="/admin/teachers" method="GET" class="mb-4 flex gap-2">
+                <input type="text" name="search" value="{{ .search }}" placeholder="Cari nama atau NIP guru..." class="block w-full rounded border border-gray-300 p-2 text-sm">
+                <button type="submit" class="bg-gray-800 text-white text-sm px-4 rounded hover:bg-gray-700">Cari</button>
+            </form>
+
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50 text-left">
+                    <tr>
+                        <th class="px-3 py-2 font-semibold text-gray-600">No</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600">NIP</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600">Nama</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600">Jabatan</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {{ range $index, $teacher := .teachers }}
+                    <tr>
+                        <td class="px-3 py-3">{{ md_add $index 1 }}</td>
+                        <td class="px-3 py-3 font-mono text-xs">{{ $teacher.NIP }}</td>
+                        <td class="px-3 py-3 font-medium text-gray-900">{{ $teacher.Name }}</td>
+                        <td class="px-3 py-3 text-xs text-gray-600">
+                            {{ if eq $teacher.GetAdditionalRoleStr "wali_kelas" }}Wali Kelas ({{ if $teacher.GetClassNameStr }}{{ $teacher.GetClassNameStr }}{{ else }}-{{ end }})
+                            {{ else if eq $teacher.GetAdditionalRoleStr "wakasek_kesiswaan" }}Wakasek Kesiswaan
+                            {{ else if $teacher.GetAdditionalRoleStr }}{{ $teacher.GetAdditionalRoleStr }}{{ else }}Guru Reguler{{ end }}
+                        </td>
+                        <td class="px-3 py-3 text-center space-x-1 whitespace-nowrap">
+                            <button @click="editData = {id: '{{ $teacher.ID }}', nip: '{{ $teacher.NIP }}', name: '{{ $teacher.Name }}', role: '{{ $teacher.Role }}', addRole: '{{ $teacher.GetAdditionalRoleStr }}'}; editModalOpen = true" class="bg-amber-500 text-white text-xs px-2 py-0.5 rounded">Edit</button>
+                            <a href="/admin/teachers/delete/{{ $teacher.ID }}" onclick="return confirm('Hapus guru ini?')" class="bg-red-600 text-white text-xs px-2 py-0.5 rounded">Hapus</a>
+                        </td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-xs">
+            <span class="text-gray-500">Hal {{ .currentPage }} dari {{ .totalPage }}</span>
+            <div class="flex gap-1">
+                <a href="/admin/teachers?page={{ .prevPage }}&search={{ .search }}" class="bg-gray-200 px-2.5 py-1 rounded {{ if le .currentPage 1 }}pointer-events-none opacity-50{{ end }}">Prev</a>
+                <a href="/admin/teachers?page={{ .nextPage }}&search={{ .search }}" class="bg-gray-600 text-white px-2.5 py-1 rounded {{ if ge .currentPage .totalPage }}pointer-events-none opacity-50{{ end }}">Next</a>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="editModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" x-cloak>
+        <div class="bg-white rounded shadow-lg w-full max-w-sm p-5" @click.away="editModalOpen = false">
+            <h3 class="text-sm font-bold text-gray-800 mb-3">Ubah Akun Guru</h3>
+            <form :action="'/admin/teachers/update/' + editData.id" method="POST">
+                <div class="mb-2"><label class="block text-xs font-medium text-gray-600">NIP</label><input type="text" name="nip" x-model="editData.nip" required class="mt-1 block w-full rounded border p-2 text-sm"></div>
+                <div class="mb-2"><label class="block text-xs font-medium text-gray-600">Nama</label><input type="text" name="name" x-model="editData.name" required class="mt-1 block w-full rounded border p-2 text-sm"></div>
+                <div class="mb-2">
+                    <label class="block text-xs font-medium text-gray-600">Role Utama</label>
+                    <select name="role" x-model="editData.role" class="mt-1 block w-full rounded border p-2 text-sm bg-white">
+                        <option value="guru">Guru</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="block text-xs font-medium text-gray-600">Jabatan Tambahan</label>
+                    <select name="additional_role" x-model="editData.addRole" class="mt-1 block w-full rounded border p-2 text-sm bg-white">
+                        <option value="">Tidak Ada</option>
+                        <option value="wali_kelas">Wali Kelas</option>
+                        <option value="wakasek_kesiswaan">Wakasek Kesiswaan</option>
+                    </select>
+                </div>
+                <div class="mb-4" x-show="editData.addRole === 'wali_kelas'">
+                    <label class="block text-xs font-medium text-gray-600">Pilih Kelas</label>
+                    <select name="managed_class_id" class="mt-1 block w-full rounded border p-2 text-sm bg-white">
+                        <option value="">-- Pilih Kelas --</option>
+                        {{ range .classes }}<option value="{{ .ID }}">{{ .ClassName }}</option>{{ end }}
+                    </select>
+                </div>
+                <div class="flex justify-end gap-1">
+                    <button type="button" @click="editModalOpen = false" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-xs">Batal</button>
+                    <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-xs">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{ end }}

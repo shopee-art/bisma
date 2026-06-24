@@ -1,0 +1,97 @@
+{{ define "students" }}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6" x-data="{ editModalOpen: false, editData: {id: '', nis: '', name: ''} }">
+    <div class="bg-white p-5 rounded shadow-sm h-fit">
+        <h3 class="text-md font-bold text-gray-700 mb-4">Tambah Siswa Baru</h3>
+        {{ if .error }}<div class="mb-3 bg-red-100 border-l-4 border-red-500 text-red-700 p-2 rounded text-xs">{{ .error }}</div>{{ end }}
+        {{ if .success }}<div class="mb-3 bg-green-100 border-l-4 border-green-500 text-green-700 p-2 rounded text-xs">{{ .success }}</div>{{ end }}
+        <form action="/admin/students" method="POST">
+            <div class="mb-2.5"><label class="block text-xs font-medium text-gray-600">NIS</label><input type="text" name="nis" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm"></div>
+            <div class="mb-2.5"><label class="block text-xs font-medium text-gray-600">Nama Siswa</label><input type="text" name="name" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm"></div>
+            <div class="mb-2.5"><label class="block text-xs font-medium text-gray-600">Password</label><input type="password" name="password" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm"></div>
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-600">Pilih Kelas</label>
+                <select name="class_id" required class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm bg-white">
+                    <option value="">-- Pilih Kelas --</option>
+                    {{ range .classes }}<option value="{{ .ID }}">{{ .ClassName }}</option>{{ end }}
+                </select>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded text-sm font-semibold shadow-xs">Simpan Siswa</button>
+        </form>
+    </div>
+
+    <div class="bg-white p-5 rounded shadow-sm lg:col-span-2 flex flex-col justify-between overflow-x-auto">
+        <div>
+            <div class="mb-4 bg-blue-50 p-4 rounded border border-blue-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="text-xs text-blue-800"><strong class="block">Import Siswa via Excel (.xlsx)</strong>Format: A:NIS | B:Nama | C:Pass | D:ID_Kelas</div>
+                <form action="/admin/students/import" method="POST" enctype="multipart/form-data" class="flex gap-1.5">
+                    <input type="file" name="excel_file" accept=".xlsx" required class="text-xs border bg-white p-1 rounded">
+                    <button type="submit" class="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded font-bold shadow-xs">Upload</button>
+                </form>
+            </div>
+            <form action="/admin/students" method="GET" class="mb-4 flex flex-col sm:flex-row gap-2">
+                <input type="text" name="search" value="{{ .search }}" placeholder="Cari nama atau NIS..." class="block w-full rounded border p-2 text-sm">
+                <select name="class_id" class="block w-full sm:w-44 rounded border p-2 text-sm bg-white">
+                    <option value="0">-- Semua Kelas --</option>
+                    {{ $selected := .selectedClass }}
+                    {{ range .classes }}<option value="{{ .ID }}" {{ if eq .ID $selected }}selected{{ end }}>{{ .ClassName }}</option>{{ end }}
+                </select>
+                <button type="submit" class="bg-gray-800 text-white text-sm px-4 rounded font-medium hover:bg-gray-700 transition shrink-0">Filter</button>
+            </form>
+
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50 text-left">
+                    <tr>
+                        <th class="px-3 py-2 font-semibold text-gray-600">No</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600">NIS</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600">Nama Siswa</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600">Kelas</th>
+                        <th class="px-3 py-2 font-semibold text-gray-600 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {{ range $index, $student := .students }}
+                    <tr>
+                        <td class="px-3 py-3">{{ md_add $index 1 }}</td>
+                        <td class="px-3 py-3 font-mono text-xs">{{ $student.NIS }}</td>
+                        <td class="px-3 py-3 font-medium text-gray-900">{{ $student.Name }}</td>
+                        <td class="px-3 py-3 text-gray-600">{{ $student.ClassName }}</td>
+                        <td class="px-3 py-3 text-center space-x-1 whitespace-nowrap">
+                            <button @click="editData = {id: '{{ $student.ID }}', nis: '{{ $student.NIS }}', name: '{{ $student.Name }}'}; editModalOpen = true" class="bg-amber-500 text-white text-xs px-2.5 py-0.5 rounded">Edit</button>
+                            <a href="/admin/students/delete/{{ $student.ID }}" onclick="return confirm('Hapus siswa ini?')" class="bg-red-600 text-white text-xs px-2.5 py-0.5 rounded">Hapus</a>
+                        </td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-xs">
+            <span class="text-gray-500">Hal {{ .currentPage }} dari {{ .totalPage }} (Limit 35)</span>
+            <div class="flex gap-1">
+                <a href="/admin/students?page={{ .prevPage }}&search={{ .search }}&class_id={{ .selectedClass }}" class="bg-gray-200 px-2.5 py-1 rounded {{ if le .currentPage 1 }}pointer-events-none opacity-50{{ end }}">Prev</a>
+                <a href="/admin/students?page={{ .nextPage }}&search={{ .search }}&class_id={{ .selectedClass }}" class="bg-gray-600 text-white px-2.5 py-1 rounded {{ if ge .currentPage .totalPage }}pointer-events-none opacity-50{{ end }}">Next</a>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="editModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" x-cloak>
+        <div class="bg-white rounded shadow-lg w-full max-w-sm p-5" @click.away="editModalOpen = false">
+            <h3 class="text-sm font-bold text-gray-800 mb-3">Ubah Data Siswa</h3>
+            <form :action="'/admin/students/update/' + editData.id" method="POST">
+                <div class="mb-2"><label class="block text-xs font-medium text-gray-600">NIS</label><input type="text" name="nis" x-model="editData.nis" required class="mt-1 block w-full rounded border p-2 text-sm"></div>
+                <div class="mb-2"><label class="block text-xs font-medium text-gray-600">Nama</label><input type="text" name="name" x-model="editData.name" required class="mt-1 block w-full rounded border p-2 text-sm"></div>
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-gray-600">Pilih Kelas Baru</label>
+                    <select name="class_id" required class="mt-1 block w-full rounded border p-2 text-sm bg-white">
+                        <option value="">-- Pilih Kelas --</option>
+                        {{ range .classes }}<option value="{{ .ID }}">{{ .ClassName }}</option>{{ end }}
+                    </select>
+                </div>
+                <div class="flex justify-end gap-1">
+                    <button type="button" @click="editModalOpen = false" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-xs">Batal</button>
+                    <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-xs">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{ end }}
