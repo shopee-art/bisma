@@ -4,6 +4,8 @@ import (
 	"bisma-school/config"
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Struct tunggal untuk entitas login Siswa
@@ -124,40 +126,6 @@ func CreateStudent(nis, name, password string, classID int) error {
 	return err
 }
 
-// ImportStudentsBulk memasukkan data siswa secara massal menggunakan batch insert (lebih cepat dari transaction per-row)
-func ImportStudentsBulk(students []Student) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	tx, err := config.DB.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	// Gunakan CopyFrom untuk bulk insert yang super cepat
-	rows := make([][]interface{}, 0, len(students))
-	for _, s := range students {
-		rows = append(rows, []interface{}{s.NIS, s.Name, s.Password, s.ClassID})
-	}
-
-	count, err := tx.CopyFrom(ctx,
-		"students",
-		[]string{"nis", "name", "password", "class_id"},
-		&copyFromSource{rows: rows},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	if int(count) != len(students) {
-		return err // Tidak semua baris berhasil di-insert
-	}
-
-	return tx.Commit(ctx)
-}
-
 // copyFromSource adalah helper untuk CopyFrom
 type copyFromSource struct {
 	rows [][]interface{}
@@ -175,4 +143,40 @@ func (c *copyFromSource) Values() ([]interface{}, error) {
 
 func (c *copyFromSource) Err() error {
 	return nil
+}
+
+// ImportStudentsBulk memasukkan data siswa secara massal dengan batch insert (lebih cepat dari transaction per-row)
+func ImportStudentsBulk(students []Student) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tx, err := config.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Gunakan CopyFrom untuk bulk insert yang super cepat
+	rows := make([][]interface{}, 0, len(students))
+	for _, s := range students {
+		rows = append(rows, []interface{}{s.NIS, s.Name, s.Password, s.ClassID})
+	}
+
+	// Gunakan pgx.Identifier untuk table name (bukan string biasa)
+	count, err := tx.CopyFrom(
+		ctx,
+		pgx.Identifier{"students"},
+		[]string{"nis", "name", "password", "class_id"},
+		&copyFromSource{rows: rows},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if int(count) != len(students) {
+		return err // Tidak semua baris berhasil di-insert
+	}
+
+	return tx.Commit(ctx)
 }

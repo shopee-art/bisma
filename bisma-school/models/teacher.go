@@ -4,6 +4,8 @@ import (
 	"bisma-school/config"
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Struct tunggal untuk entitas login Guru / Admin
@@ -128,6 +130,25 @@ func DeleteTeacher(id int) error {
 	return err
 }
 
+// copyFromSourceTeacher adalah helper untuk CopyFrom teacher
+type copyFromSourceTeacher struct {
+	rows [][]interface{}
+	idx  int
+}
+
+func (c *copyFromSourceTeacher) Next() bool {
+	c.idx++
+	return c.idx <= len(c.rows)
+}
+
+func (c *copyFromSourceTeacher) Values() ([]interface{}, error) {
+	return c.rows[c.idx-1], nil
+}
+
+func (c *copyFromSourceTeacher) Err() error {
+	return nil
+}
+
 // ImportTeachersBulk memasukkan banyak data guru sekaligus dengan CopyFrom (batch insert cepat)
 func ImportTeachersBulk(teachers []Teacher) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -148,8 +169,10 @@ func ImportTeachersBulk(teachers []Teacher) error {
 		rows = append(rows, []interface{}{t.NIP, t.Name, t.Password, t.Role, addRole, t.ManagedClassID})
 	}
 
-	count, err := tx.CopyFrom(ctx,
-		"teachers",
+	// Gunakan pgx.Identifier untuk table name (bukan string biasa)
+	count, err := tx.CopyFrom(
+		ctx,
+		pgx.Identifier{"teachers"},
 		[]string{"nip", "name", "password", "role", "additional_role", "managed_class_id"},
 		&copyFromSourceTeacher{rows: rows},
 	)
@@ -163,24 +186,6 @@ func ImportTeachersBulk(teachers []Teacher) error {
 	}
 
 	return tx.Commit(ctx)
-}
-
-type copyFromSourceTeacher struct {
-	rows [][]interface{}
-	idx  int
-}
-
-func (c *copyFromSourceTeacher) Next() bool {
-	c.idx++
-	return c.idx <= len(c.rows)
-}
-
-func (c *copyFromSourceTeacher) Values() ([]interface{}, error) {
-	return c.rows[c.idx-1], nil
-}
-
-func (c *copyFromSourceTeacher) Err() error {
-	return nil
 }
 
 // CreateTeacher menambah data guru baru ke database
