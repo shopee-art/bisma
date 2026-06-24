@@ -3,6 +3,7 @@ package models
 import (
 	"bisma-school/config"
 	"context"
+	"time"
 )
 
 // Struct tunggal untuk entitas login Guru / Admin
@@ -12,10 +13,9 @@ type Teacher struct {
 	Name           string
 	Password       string
 	Role           string
-	ProfilePicture string 
-	// 💡 Tambahkan dua field ini ke struct Teacher utama karena dipanggil di baris 126 Anda:
-	AdditionalRole *string 
-	ManagedClassID *int    
+	ProfilePicture string
+	AdditionalRole *string
+	ManagedClassID *int
 }
 
 // Struct untuk kebutuhan list tabel data master di halaman Admin
@@ -25,26 +25,28 @@ type TeacherList struct {
 	Name           string
 	Role           string
 	ProfilePicture string
-	ClassName      *string // 💡 Ubah jadi pointer agar tidak eror saat di-indirect (*t.ClassName)
-	AdditionalRole *string // 💡 Ubah jadi pointer agar tidak eror saat dibandingkan dengan nil (== nil)
+	ClassName      *string
+	AdditionalRole *string
 	ManagedClassID *int
 }
 
-// FindTeacherByNIP digunakan saat login
+// FindTeacherByNIP digunakan saat login dengan context timeout
 func FindTeacherByNIP(nip string) (Teacher, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	var t Teacher
 
-	query := `SELECT id, nip, name, password, role, COALESCE(profile_picture, '') 
+	query := `SELECT id, nip, name, password, role, COALESCE(profile_picture, '')
 	          FROM teachers WHERE nip = $1`
-	
+
 	err := config.DB.QueryRow(ctx, query, nip).Scan(
 		&t.ID, &t.NIP, &t.Name, &t.Password, &t.Role, &t.ProfilePicture,
 	)
 	return t, err
 }
 
-// GetAdditionalRoleStr adalah fungsi pembantu untuk template HTML agar aman dari error pointer
+// GetAdditionalRoleStr adalah fungsi pembantu untuk template HTML
 func (t TeacherList) GetAdditionalRoleStr() string {
 	if t.AdditionalRole == nil {
 		return ""
@@ -54,7 +56,7 @@ func (t TeacherList) GetAdditionalRoleStr() string {
 
 // GetClassNameStr adalah fungsi pembantu untuk template HTML
 func (t TeacherList) GetClassNameStr() string {
-	if t.ClassName != nil && *t.ClassName == "" {
+	if t.ClassName == nil || *t.ClassName == "" {
 		return ""
 	}
 	return *t.ClassName
@@ -62,7 +64,9 @@ func (t TeacherList) GetClassNameStr() string {
 
 // GetFilteredTeachers menarik data guru dengan fitur Pencarian dan Pagination
 func GetFilteredTeachers(limit, offset int, search string) ([]TeacherList, int, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	var teachers []TeacherList
 	var totalData int
 
@@ -75,12 +79,12 @@ func GetFilteredTeachers(limit, offset int, search string) ([]TeacherList, int, 
 		return nil, 0, err
 	}
 
-	// 2. Tarik data terfilter
-	query := `SELECT t.id, t.nip, t.name, t.role, t.additional_role, c.class_name 
-			  FROM teachers t 
-			  LEFT JOIN classes c ON t.managed_class_id = c.id 
+	// 2. Tarik data terfilter dengan pre-allocated slice
+	query := `SELECT t.id, t.nip, t.name, t.role, t.profile_picture, t.additional_role, c.class_name
+			  FROM teachers t
+			  LEFT JOIN classes c ON t.managed_class_id = c.id
 			  WHERE t.name ILIKE $1 OR t.nip ILIKE $1
-			  ORDER BY t.name ASC 
+			  ORDER BY t.name ASC
 			  LIMIT $2 OFFSET $3`
 
 	rows, err := config.DB.Query(ctx, query, searchParam, limit, offset)
@@ -89,54 +93,104 @@ func GetFilteredTeachers(limit, offset int, search string) ([]TeacherList, int, 
 	}
 	defer rows.Close()
 
+	teachers = make([]TeacherList, 0, limit)
+
 	for rows.Next() {
 		var tl TeacherList
-		err := rows.Scan(&tl.ID, &tl.NIP, &tl.Name, &tl.Role, &tl.AdditionalRole, &tl.ClassName)
+		err := rows.Scan(&tl.ID, &tl.NIP, &tl.Name, &tl.Role, &tl.ProfilePicture, &tl.AdditionalRole, &tl.ClassName)
 		if err != nil {
 			return nil, 0, err
 		}
 		teachers = append(teachers, tl)
 	}
-	return teachers, totalData, nil
+
+	return teachers, totalData, rows.Err()
 }
 
 // UpdateTeacher memperbarui data guru di database
 func UpdateTeacher(id int, nip, name, role, additionalRole string, managedClassID *int) error {
-	query := `UPDATE teachers SET nip = $1, name = $2, role = $3, 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	query := `UPDATE teachers SET nip = $1, name = $2, role = $3,
 			  additional_role = NULLIF($4, ''), managed_class_id = $5 WHERE id = $6`
-	_, err := config.DB.Exec(context.Background(), query, nip, name, role, additionalRole, managedClassID, id)
+	_, err := config.DB.Exec(ctx, query, nip, name, role, additionalRole, managedClassID, id)
 	return err
 }
 
 // DeleteTeacher menghapus data guru
 func DeleteTeacher(id int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	query := "DELETE FROM teachers WHERE id = $1"
-	_, err := config.DB.Exec(context.Background(), query, id)
+	_, err := config.DB.Exec(ctx, query, id)
 	return err
 }
 
-// ImportTeachersBulk memasukkan banyak data guru sekaligus (Transaction)
+// ImportTeachersBulk memasukkan banyak data guru sekaligus dengan CopyFrom (batch insert cepat)
 func ImportTeachersBulk(teachers []Teacher) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	tx, err := config.DB.Begin(ctx)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer tx.Rollback(ctx)
 
-	query := `INSERT INTO teachers (nip, name, password, role, additional_role, managed_class_id) 
-			  VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6)`
-
+	rows := make([][]interface{}, 0, len(teachers))
 	for _, t := range teachers {
-		_, err := tx.Exec(ctx, query, t.NIP, t.Name, t.Password, t.Role, t.AdditionalRole, t.ManagedClassID)
-		if err != nil { return err }
+		var addRole interface{} = nil
+		if t.AdditionalRole != nil {
+			addRole = *t.AdditionalRole
+		}
+		rows = append(rows, []interface{}{t.NIP, t.Name, t.Password, t.Role, addRole, t.ManagedClassID})
 	}
+
+	count, err := tx.CopyFrom(ctx,
+		"teachers",
+		[]string{"nip", "name", "password", "role", "additional_role", "managed_class_id"},
+		&copyFromSourceTeacher{rows: rows},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if int(count) != len(teachers) {
+		return err
+	}
+
 	return tx.Commit(ctx)
+}
+
+type copyFromSourceTeacher struct {
+	rows [][]interface{}
+	idx  int
+}
+
+func (c *copyFromSourceTeacher) Next() bool {
+	c.idx++
+	return c.idx <= len(c.rows)
+}
+
+func (c *copyFromSourceTeacher) Values() ([]interface{}, error) {
+	return c.rows[c.idx-1], nil
+}
+
+func (c *copyFromSourceTeacher) Err() error {
+	return nil
 }
 
 // CreateTeacher menambah data guru baru ke database
 func CreateTeacher(nip, name, password, role, additionalRole string, managedClassID *int) error {
-	query := `INSERT INTO teachers (nip, name, password, role, additional_role, managed_class_id) 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	query := `INSERT INTO teachers (nip, name, password, role, additional_role, managed_class_id)
 			  VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6)`
-	
-	_, err := config.DB.Exec(context.Background(), query, nip, name, password, role, additionalRole, managedClassID)
+
+	_, err := config.DB.Exec(ctx, query, nip, name, password, role, additionalRole, managedClassID)
 	return err
 }
