@@ -35,10 +35,28 @@ func parseClassID(classIDStr string) *int {
 }
 
 // getSessionData mengambil data user dari session dengan aman
-func getSessionData(c *gin.Context) (name, role string, avatar, nip, className interface{}) {
+func getSessionData(c *gin.Context) (name string, role string, avatar interface{}, nip interface{}, className interface{}) {
 	session := sessions.Default(c)
-	return session.Get("user_name"), session.Get("user_role"),
-		session.Get("user_avatar"), session.Get("user_nip"), session.Get("user_class")
+
+	// Type assertion yang aman untuk string fields
+	if nameVal := session.Get("user_name"); nameVal != nil {
+		if nameStr, ok := nameVal.(string); ok {
+			name = nameStr
+		}
+	}
+
+	if roleVal := session.Get("user_role"); roleVal != nil {
+		if roleStr, ok := roleVal.(string); ok {
+			role = roleStr
+		}
+	}
+
+	// Interface fields biarkan as-is (tidak perlu type assertion)
+	avatar = session.Get("user_avatar")
+	nip = session.Get("user_nip")
+	className = session.Get("user_class")
+
+	return
 }
 
 // renderAdminPage adalah helper untuk render halaman admin dengan data sidebar
