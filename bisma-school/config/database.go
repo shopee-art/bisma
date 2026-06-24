@@ -33,8 +33,8 @@ func ConnectDB() {
 	config.MinConns = 5            // Min idle connections (warm pool)
 	config.MaxConnLifetime = 15 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute
-	config.HealthCheckInterval = 1 * time.Minute
-	config.ConnectTimeout = 10 * time.Second
+	// Note: HealthCheckInterval dan ConnectTimeout tidak tersedia di semua versi pgx
+	// Versi yang lebih baru support di context.WithTimeout
 
 	// Membuat pool koneksi
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
@@ -44,7 +44,7 @@ func ConnectDB() {
 
 	DB = pool
 
-	// Tes koneksi ke database
+	// Tes koneksi ke database dengan timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
